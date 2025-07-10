@@ -179,7 +179,7 @@ class Turret(pg.sprite.Sprite):
         if self.direction == "left":
             player.set_velocity(10, 0)
         elif self.direction == "right":
-            player.set_velocity(100, -50)
+            player.set_velocity(300, -50)
         elif self.direction == "up":
             player.set_velocity(0, -10)
         elif self.direction == "down":
