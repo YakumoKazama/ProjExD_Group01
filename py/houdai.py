@@ -4,7 +4,6 @@ import time
 import math
 import random
 
-import numpy as np
 import pygame as pg
 
 
@@ -41,6 +40,10 @@ class Player(pg.sprite.Sprite):
         初期位置などを決める
         """
         super().__init__()
+        # 吹っ飛び用のタイマーと減速率を追加
+        self.knockback_timer = 5
+        self.knockback_duration = 20  # 吹っ飛び時間（フレーム数）
+        self.knockback_friction = 0.85
         # Surface
         self.image = pg.image.load("fig/test.gif")
         self.rect = self.image.get_rect()
@@ -82,22 +85,37 @@ class Player(pg.sprite.Sprite):
                 self.rect.top = block.rect.bottom
             self.vy = 0
 
+    def get_rect(self):
+        return self.rect
+    
+    def set_velocity(self, vx: int, vy: int):
+        self.vx = vx
+        self.vy = vy
+        self.is_jumping = True
+        self.knockback_timer = self.knockback_duration
+
+        
     def update(self, key_lst: list[bool], screen: pg.Surface):
         """
         画面に表示する
         """
-        self.vx = 0
+        input_vx = 0
         if key_lst[pg.K_a]:
             self.vx = self.delta[pg.K_a] * self.walk_speed
         if key_lst[pg.K_d]:
             self.vx = self.delta[pg.K_d] * self.walk_speed
         
+        self.vx += input_vx
+
         if self.is_jumping:
             self.vy += self.gravity
             self.is_ground = False
 
         self.wall(self.vx, self.vy)
         screen.blit(self.image, self.rect)
+
+        if not key_lst[pg.K_a] and not key_lst[pg.K_d]:
+            self.vx = 0
 
 
 class Block(pg.sprite.Sprite):
@@ -140,6 +158,36 @@ def map_loading(filename: str) -> pg.sprite.Group:
                      BLOCK_HEIGHT * (i+1))))
     return blocks
 
+class Turret(pg.sprite.Sprite):
+    def __init__(self, pos, direction, bullets):
+        super().__init__()
+        self.image = pg.image.load("fig/houdai.gif").convert_alpha()
+        self.rect = self.image.get_rect(center=pos)
+        self.direction = direction
+        self.bullets = bullets
+        self.timer = 0
+
+    def get_rect(self):
+        return self.rect
+
+    def get_direction(self):
+        return self.direction
+
+    def fire_player(self, player):
+        if not self.rect.colliderect(player.rect):
+            return
+        if self.direction == "left":
+            player.set_velocity(10, 0)
+        elif self.direction == "right":
+            player.set_velocity(300, -50)
+        elif self.direction == "up":
+            player.set_velocity(0, -10)
+        elif self.direction == "down":
+            player.set_velocity(0, 30)
+
+    def update(self, vx=0):
+        self.rect.x += vx
+
 
 def main():
     pg.display.set_caption("Test")
@@ -148,6 +196,10 @@ def main():
     #インスタンス生成
     blocks = map_loading("map/stage1.txt")
     player = Player((150, HEIGHT - 150), blocks)
+    turrets = pg.sprite.Group()
+    bullets = pg.sprite.Group()
+    turrets.add(Turret((600, HEIGHT - 100), "right", bullets))
+
     half_screen = WIDTH // 2
 
     #時間計測用
@@ -163,20 +215,19 @@ def main():
                     player.is_jumping = True
                     player.vy = player.jump_speed
         
-        # Clear Screen
         screen.fill((255, 255, 255))
-
-	    # なにかの処理
-        player.vy += player.gravity        
-
-        # Update
+        player.vy += player.gravity
+        for turret in turrets:
+            turret.fire_player(player)
         if player.rect.x > half_screen:
-            blocks.update(-player.vx) 
+            blocks.update(-player.vx)
+            turrets.update(-player.vx)
         else:
             blocks.update()
+            turrets.update()
         blocks.draw(screen)
-        player.update(key_lst, screen)
-
+        turrets.draw(screen)
+        player.update(key_lst, screen) 
         pg.display.update()
         tmr += 1
         clock.tick(50)
